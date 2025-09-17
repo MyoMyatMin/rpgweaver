@@ -1,11 +1,16 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import type { GenerateRequest, GenerateResponse } from "@/types";
+import type { GenerateRequest, GenerateResponse, DemoTemplate } from "@/types";
+import DialogueTreeVisualizer from "@/components/DialogueTreeVisualizer";
+import QuestVisualizer from "@/components/QuestVisualizer";
+import ExportOptions from "@/components/ExportOptions";
 
 type Tab = "dialogue" | "quest";
+type ViewMode = "visual" | "json";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("dialogue");
+  const [viewMode, setViewMode] = useState<ViewMode>("visual");
   const [gameLore, setGameLore] = useState("");
   const [npcName, setNpcName] = useState("");
   const [npcPersonality, setNpcPersonality] =
@@ -19,6 +24,7 @@ export default function Home() {
   const [history, setHistory] = useState<
     Array<{ id: string; req: GenerateRequest; res: GenerateResponse }>
   >([]);
+  const [templates, setTemplates] = useState<DemoTemplate[]>([]);
 
   useEffect(() => {
     const storedLore =
@@ -35,6 +41,11 @@ export default function Home() {
         setHistory(JSON.parse(storedHistory));
       } catch {}
     }
+
+    fetch("/api/templates")
+      .then((res) => res.json())
+      .then(setTemplates)
+      .catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -113,6 +124,19 @@ export default function Home() {
     setResult(item.res);
   }
 
+  function loadTemplate(template: DemoTemplate) {
+    setActiveTab(template.type);
+    setGameLore(template.data.gameLore);
+    if (template.type === "dialogue") {
+      setNpcName(template.data.npcName || "");
+      setNpcPersonality((template.data.npcPersonality as any) || "Mysterious");
+      setSituation(template.data.situation || "");
+    } else {
+      setLocation(template.data.location || "");
+      setPrimaryObjective(template.data.primaryObjective || "");
+    }
+  }
+
   function copyResult() {
     if (!result) return;
     navigator.clipboard.writeText(JSON.stringify(result, null, 2));
@@ -121,18 +145,23 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-gray-950 to-black text-white">
       <header className="container pt-12 pb-6 animate-fadeIn">
-        <h1 className="text-3xl sm:text-5xl font-bold tracking-tight">
-          RPGWeaver
-        </h1>
-        <p className="muted mt-2 max-w-prose">
-          Generate rich, structured RPG dialogues and quests with AI. Provide
-          your game lore and parameters, and get consistent JSON you can drop
-          into your tools.
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl sm:text-5xl font-bold tracking-tight">
+              RPGWeaver
+            </h1>
+            <p className="muted mt-2 max-w-prose">
+              Generate rich, structured RPG dialogues and quests with AI.
+              Provide your game lore and parameters, and get consistent JSON you
+              can drop into your tools.
+            </p>
+          </div>
+        </div>
       </header>
 
       <main className="container grid gap-6 lg:grid-cols-3 pb-16">
         <section className="lg:col-span-2 space-y-6">
+          {/* Game Lore Input */}
           <div className="card">
             <label className="label" htmlFor="lore">
               Game Lore
@@ -163,6 +192,7 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Generation Form */}
           <div className="card">
             <div className="flex gap-2 mb-4">
               <button
@@ -271,51 +301,93 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="card">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold">Result</h2>
-              <div className="flex gap-2">
-                <button
-                  className="btn btn-secondary"
-                  onClick={copyResult}
-                  disabled={!result}
-                >
-                  Copy JSON
-                </button>
-                {result && (
-                  <a
-                    className="btn btn-secondary"
-                    href={`data:application/json;charset=utf-8,${encodeURIComponent(
-                      JSON.stringify(result, null, 2)
-                    )}`}
-                    download={`${result.type}-result.json`}
-                  >
-                    Export JSON
-                  </a>
+          {/* Results Display */}
+          {result && (
+            <>
+              {/* View Mode Toggle */}
+              <div className="card">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold">Result</h2>
+                  <div className="flex gap-2">
+                    <button
+                      className={`btn ${
+                        viewMode === "visual" ? "btn-primary" : "btn-secondary"
+                      }`}
+                      onClick={() => setViewMode("visual")}
+                    >
+                      Visual Tree
+                    </button>
+                    <button
+                      className={`btn ${
+                        viewMode === "json" ? "btn-primary" : "btn-secondary"
+                      }`}
+                      onClick={() => setViewMode("json")}
+                    >
+                      Raw JSON
+                    </button>
+                  </div>
+                </div>
+
+                {viewMode === "visual" ? (
+                  result.type === "dialogue" ? (
+                    <DialogueTreeVisualizer dialogue={result} />
+                  ) : (
+                    <QuestVisualizer quest={result} />
+                  )
+                ) : (
+                  <div className="min-h-24 bg-black/30 rounded-md p-3 overflow-auto text-sm">
+                    <pre className="whitespace-pre-wrap break-words text-gray-200">
+                      {JSON.stringify(result, null, 2)}
+                    </pre>
+                  </div>
                 )}
               </div>
+
+              {/* Export Options */}
+              <ExportOptions data={result} />
+            </>
+          )}
+
+          {/* Loading/Error States */}
+          {loading && (
+            <div className="card">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                <span className="muted">Contacting the AI...</span>
+              </div>
             </div>
-            <div className="min-h-24 bg-black/30 rounded-md p-3 overflow-auto text-sm">
-              {loading && (
-                <div className="flex items-center gap-3">
-                  <span className="h-3 w-3 rounded-full bg-white/80 animate-pulse"></span>
-                  <span className="muted">Contacting the AI...</span>
-                </div>
-              )}
-              {error && <div className="text-red-400">{error}</div>}
-              {!loading && !error && result && (
-                <pre className="whitespace-pre-wrap break-words text-gray-200">
-                  {JSON.stringify(result, null, 2)}
-                </pre>
-              )}
-              {!loading && !error && !result && (
-                <div className="muted">Results will appear here.</div>
-              )}
+          )}
+
+          {error && (
+            <div className="card">
+              <div className="text-red-400">{error}</div>
             </div>
-          </div>
+          )}
         </section>
 
         <aside className="space-y-6">
+          {/* Templates */}
+          <div className="card">
+            <h3 className="text-base font-semibold mb-3">Demo Templates</h3>
+            <div className="space-y-2">
+              {templates
+                .filter((t) => t.type === activeTab)
+                .map((template) => (
+                  <button
+                    key={template.id}
+                    className="w-full text-left btn btn-secondary"
+                    onClick={() => loadTemplate(template)}
+                  >
+                    <div className="font-medium">{template.name}</div>
+                    <div className="text-xs text-gray-400">
+                      {template.description}
+                    </div>
+                  </button>
+                ))}
+            </div>
+          </div>
+
+          {/* History */}
           <div className="card">
             <h3 className="text-base font-semibold mb-2">History</h3>
             <ul className="space-y-2">
@@ -351,39 +423,14 @@ export default function Home() {
             )}
           </div>
 
-          <div className="card">
-            <h3 className="text-base font-semibold mb-2">Templates</h3>
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="btn btn-secondary"
-                onClick={() => {
-                  setActiveTab("dialogue");
-                  setNpcName("Mira Stoneveil");
-                  setNpcPersonality("Serious");
-                  setSituation("Warns about unstable Ember Core");
-                }}
-              >
-                NPC: Blacksmith
-              </button>
-              <button
-                className="btn btn-secondary"
-                onClick={() => {
-                  setActiveTab("quest");
-                  setLocation("Emberreach");
-                  setPrimaryObjective("Retrieve the Ember Core");
-                }}
-              >
-                Quest: Ember Core
-              </button>
-            </div>
-          </div>
-
+          {/* Tips */}
           <div className="card">
             <h3 className="text-base font-semibold mb-2">Tips</h3>
             <ul className="list-disc pl-5 text-sm text-gray-300 space-y-1">
               <li>Longer lore yields more consistent outputs.</li>
               <li>Use the templates to sanity check quickly.</li>
-              <li>Copy JSON and integrate into your toolchain.</li>
+              <li>Try different personalities for varied dialogue.</li>
+              <li>Export to Unity/Unreal for direct integration.</li>
             </ul>
           </div>
         </aside>
@@ -392,4 +439,4 @@ export default function Home() {
   );
 }
 
-const LORE_EXAMPLE = `The city of Emberreach was built atop ancient lava tunnels. The Ember Core, a relic that stabilizes the city’s forges, is weakening. Guilds compete for influence, and the Night Wardens patrol shadowed alleys. Magic is regulated; contraband runes circulate in the black market.`;
+const LORE_EXAMPLE = `The city of Emberreach was built atop ancient lava tunnels. The Ember Core, a relic that stabilizes the city's forges, is weakening. Guilds compete for influence, and the Night Wardens patrol shadowed alleys. Magic is regulated; contraband runes circulate in the black market.`;

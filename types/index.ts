@@ -3,11 +3,9 @@ export type GenerateType = "dialogue" | "quest";
 export interface GenerateRequest {
   type: GenerateType;
   gameLore: string;
-  // Dialogue-specific fields
   npcName?: string;
   npcPersonality?: "Goofy" | "Serious" | "Mysterious" | "Aggressive";
   situation?: string;
-  // Quest-specific fields
   location?: string;
   primaryObjective?: string;
 }
@@ -62,4 +60,27 @@ export type GenerateResponse = DialogueResponse | QuestResponse;
 export interface ApiErrorBody {
   error: string;
   details?: unknown;
+  retryAfter?: number;
+}
+
+export interface DemoTemplate {
+  id: string;
+  name: string;
+  description: string;
+  type: GenerateType;
+  data: {
+    gameLore: string;
+    npcName?: string;
+    npcPersonality?: string;
+    situation?: string;
+    location?: string;
+    primaryObjective?: string;
+  };
+}
+
+export interface ExportFormat {
+  name: string;
+  extension: string;
+  mimeType: string;
+  transform: (data: GenerateResponse) => string;
 }
